@@ -387,22 +387,74 @@ function renderEntryForm(view, entry) {
 
 // ---------- Export ----------
 
-function renderExport(view) {
+function entriesInRange(entries, from, to) {
+  return entries.filter((e) => {
+    if (from && e.entry_date < from) return false;
+    if (to && e.entry_date > to) return false;
+    return true;
+  });
+}
+
+async function renderExport(view) {
+  view.innerHTML = `<p class="hint">Lade…</p>`;
+  if (cachedEntries.length === 0) {
+    try {
+      cachedEntries = await listEntries();
+    } catch (err) {
+      view.innerHTML = `<p class="error">Fehler beim Laden: ${escapeHtml(err.message)}</p>`;
+      return;
+    }
+  }
+
+  const dates = cachedEntries.map((e) => e.entry_date).sort();
+  const minDate = dates[0] || "";
+  const maxDate = dates[dates.length - 1] || "";
+
   view.innerHTML = `
     <div class="export-panel">
-      <p class="hint">Exportiere deine Krankengeschichte, z.B. für den Arztbesuch.</p>
+      <p class="hint">Exportiere deine Krankengeschichte, z.B. für den Arztbesuch. Optional nach Zeitraum eingrenzen.</p>
+      <div class="date-range">
+        <label>Von
+          <input type="date" id="fromDate" ${minDate ? `min="${minDate}"` : ""} ${maxDate ? `max="${maxDate}"` : ""} />
+        </label>
+        <label>Bis
+          <input type="date" id="toDate" ${minDate ? `min="${minDate}"` : ""} ${maxDate ? `max="${maxDate}"` : ""} />
+        </label>
+      </div>
+      <button type="button" id="clearRangeBtn" class="link-btn">Zeitraum zurücksetzen</button>
       <button id="printBtn" class="primary">Als PDF / Drucken</button>
       <button id="csvBtn" class="secondary">Als CSV exportieren</button>
-      <p class="muted">${cachedEntries.length} Einträge geladen.</p>
+      <p id="rangeCount" class="muted"></p>
     </div>
   `;
-  document.getElementById("printBtn").addEventListener("click", async () => {
-    const entries = cachedEntries.length ? cachedEntries : await listEntries();
-    openPrintView(entries);
+
+  const fromInput = document.getElementById("fromDate");
+  const toInput = document.getElementById("toDate");
+  const rangeCount = document.getElementById("rangeCount");
+
+  function currentSelection() {
+    return entriesInRange(cachedEntries, fromInput.value || null, toInput.value || null);
+  }
+
+  function updateCount() {
+    const n = currentSelection().length;
+    rangeCount.textContent = `${n} von ${cachedEntries.length} Einträgen ausgewählt.`;
+  }
+  updateCount();
+
+  fromInput.addEventListener("change", updateCount);
+  toInput.addEventListener("change", updateCount);
+  document.getElementById("clearRangeBtn").addEventListener("click", () => {
+    fromInput.value = "";
+    toInput.value = "";
+    updateCount();
   });
-  document.getElementById("csvBtn").addEventListener("click", async () => {
-    const entries = cachedEntries.length ? cachedEntries : await listEntries();
-    exportCsv(entries);
+
+  document.getElementById("printBtn").addEventListener("click", () => {
+    openPrintView(currentSelection());
+  });
+  document.getElementById("csvBtn").addEventListener("click", () => {
+    exportCsv(currentSelection());
   });
 }
 
