@@ -1,23 +1,50 @@
 import { SYMPTOMS, OTHER_COLOR } from "./symptoms.js";
 
-// Vereinfachte Körper-Silhouette (Vorder- und Rückansicht sehen im MVP gleich aus,
-// die Ansicht wird trotzdem separat gespeichert, damit z.B. "Rücken" vs. "Brust"
-// später unterschieden werden kann).
-const BODY_SILHOUETTE = `
-  <path d="M100 20 a18 18 0 1 0 0.01 0 Z
-           M78 46 q22 -10 44 0 l8 55 q-4 10 -14 10 l-4 40 q10 4 10 14 l0 55 q0 8 -8 8 q-6 0 -7 -8 l-6 -60 h-2 l-6 60 q-1 8 -7 8 q-8 0 -8 -8 l0 -55 q0 -10 10 -14 l-4 -40 q-10 0 -14 -10 Z"
-        fill="var(--body-fill)" stroke="var(--body-stroke)" stroke-width="2"/>
-  <path d="M78 55 l-22 40 q-4 8 4 12 q7 3 11 -5 l20 -38 Z" fill="var(--body-fill)" stroke="var(--body-stroke)" stroke-width="2"/>
-  <path d="M122 55 l22 40 q4 8 -4 12 q-7 3 -11 -5 l-20 -38 Z" fill="var(--body-fill)" stroke="var(--body-stroke)" stroke-width="2"/>
-`;
+export const VIEW_W = 200;
+export const VIEW_H = 400;
 
-function makeSvg(viewLabel) {
+// Vereinfachte, aber proportionierte Körper-Silhouette (Kreis-Kopf, Rumpf als
+// weiche Trapezform, Arme/Beine als abgerundete "Kapseln"). Für die Rückansicht
+// wird zusätzlich eine Wirbelsäulen-Linie gezeichnet, damit Vorder-/Rückseite
+// auch optisch unterscheidbar sind.
+function silhouetteParts(fill, stroke, view) {
+  const limb = (d, width) => `
+    <path d="${d}" fill="none" stroke="${stroke}" stroke-width="${width + 3}" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="${d}" fill="none" stroke="${fill}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/>
+  `;
+  const spine = view === "back" ? `<path d="M100,72 L100,175" stroke="${stroke}" stroke-width="1.5" fill="none" opacity="0.6"/>` : "";
+  return `
+    <circle cx="100" cy="34" r="22" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    <rect x="90" y="52" width="20" height="14" rx="5" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    <path d="M64,70 C64,56 136,56 136,70 L126,148 Q131,178 133,181 L67,181 Q69,178 74,148 Z"
+          fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>
+    ${spine}
+    ${limb("M67,74 C50,95 42,130 39,168 C38,185 37,200 36,214", 15)}
+    ${limb("M133,74 C150,95 158,130 161,168 C162,185 163,200 164,214", 15)}
+    ${limb("M85,178 C82,220 80,260 78,295 C77,320 76,345 74,368", 19)}
+    ${limb("M115,178 C118,220 120,260 122,295 C123,320 124,345 126,368", 19)}
+  `;
+}
+
+export function silhouetteMarkup(points, view, opts = {}) {
+  const width = opts.width || 110;
+  const height = opts.height || 220;
+  const fill = opts.fill || "#e2e8f0";
+  const stroke = opts.stroke || "#94a3b8";
+  const pts = (points || []).filter((p) => p.view === view);
+  const markers = pts
+    .map((p) => `<circle cx="${(p.x * VIEW_W).toFixed(1)}" cy="${(p.y * VIEW_H).toFixed(1)}" r="7" fill="${p.color}" stroke="white" stroke-width="1.5"/>`)
+    .join("");
+  return `<svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${silhouetteParts(fill, stroke, view)}${markers}</svg>`;
+}
+
+function makeSvg(view) {
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", "0 0 200 300");
+  svg.setAttribute("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`);
   svg.setAttribute("class", "bodymap-svg");
-  svg.dataset.view = viewLabel;
-  svg.innerHTML = BODY_SILHOUETTE;
+  svg.dataset.view = view;
+  svg.innerHTML = silhouetteParts("var(--body-fill)", "var(--body-stroke)", view);
   return svg;
 }
 
@@ -30,7 +57,6 @@ export function renderBodyMap(container, points, onChange) {
   const wrap = document.createElement("div");
   wrap.className = "bodymap";
 
-  // View toggle
   const viewToggle = document.createElement("div");
   viewToggle.className = "bodymap-view-toggle";
   const frontBtn = document.createElement("button");
@@ -41,7 +67,11 @@ export function renderBodyMap(container, points, onChange) {
   backBtn.type = "button";
   backBtn.textContent = "Rückseite";
   backBtn.className = "chip";
-  viewToggle.append(frontBtn, backBtn);
+  const resetBtn = document.createElement("button");
+  resetBtn.type = "button";
+  resetBtn.textContent = "Punkte zurücksetzen";
+  resetBtn.className = "chip reset-chip";
+  viewToggle.append(frontBtn, backBtn, resetBtn);
 
   const svgHolder = document.createElement("div");
   svgHolder.className = "bodymap-svg-holder";
@@ -70,12 +100,12 @@ export function renderBodyMap(container, points, onChange) {
     svg.querySelectorAll(".bodymap-marker").forEach((m) => m.remove());
     localPoints
       .filter((p) => p.view === svg.dataset.view)
-      .forEach((p, idx) => {
+      .forEach((p) => {
         const NS = "http://www.w3.org/2000/svg";
         const c = document.createElementNS(NS, "circle");
-        c.setAttribute("cx", p.x * 200);
-        c.setAttribute("cy", p.y * 300);
-        c.setAttribute("r", "6");
+        c.setAttribute("cx", p.x * VIEW_W);
+        c.setAttribute("cy", p.y * VIEW_H);
+        c.setAttribute("r", "7");
         c.setAttribute("fill", p.color);
         c.setAttribute("stroke", "white");
         c.setAttribute("stroke-width", "1.5");
@@ -122,6 +152,13 @@ export function renderBodyMap(container, points, onChange) {
 
   frontBtn.addEventListener("click", () => showView("front"));
   backBtn.addEventListener("click", () => showView("back"));
+  resetBtn.addEventListener("click", () => {
+    if (localPoints.length === 0) return;
+    if (!confirm("Alle Punkte auf dem Körper (Vorder- und Rückseite) entfernen?")) return;
+    localPoints.length = 0;
+    showView(activeView);
+    onChange([...localPoints]);
+  });
 
   wrap.append(legend, viewToggle, svgHolder, hint);
   container.appendChild(wrap);

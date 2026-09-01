@@ -347,6 +347,7 @@ button.link-btn {
 
 .bodymap-view-toggle {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -363,6 +364,150 @@ button.link-btn {
   background: var(--brand);
   color: white;
   border-color: var(--brand);
+}
+
+.reset-chip {
+  margin-left: auto;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* ---------- Overview: tabs / filter / sort ---------- */
+
+.overview-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 0.6rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  background: var(--brand);
+  color: white;
+  border-color: var(--brand);
+}
+
+.list-controls {
+  margin-bottom: 0.6rem;
+}
+
+.sort-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.sort-label select {
+  font-size: 0.95rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.filter-chip::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot-color, transparent);
+  margin-right: 0.35rem;
+}
+
+/* ---------- Calendar ---------- */
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.calendar-nav strong {
+  text-transform: capitalize;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 1rem;
+}
+
+.cal-cell {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  font-size: 0.8rem;
+  color: var(--text);
+  padding: 0.15rem;
+}
+
+.cal-cell.cal-weekday {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+.cal-cell.has-entry {
+  background: var(--surface);
+  border-color: var(--border);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.cal-cell.today .cal-daynum {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
+.cal-cell.selected {
+  border-color: var(--brand);
+  background: #ecfdf5;
+}
+
+.cal-dots {
+  display: flex;
+  gap: 2px;
+}
+
+.cal-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.cal-selected-heading {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
 }
 
 .bodymap-svg-holder {

@@ -1,13 +1,25 @@
 import { supabase } from "./supabaseClient.js";
 import { signIn, signOut, getSession, onAuthChange, requestPasswordReset } from "./auth.js";
 import { listEntries, getEntry, createEntry, updateEntry, deleteEntry, listMyShares, inviteObserver, removeObserver } from "./entries.js";
-import { SYMPTOMS, symptomLabel } from "./symptoms.js";
+import { SYMPTOMS, symptomLabel, symptomColor } from "./symptoms.js";
 import { renderBodyMap } from "./bodymap.js";
 import { exportCsv, openPrintView } from "./export.js";
 
 const appEl = document.getElementById("app");
 let currentSession = null;
 let cachedEntries = [];
+
+let overviewMode = "list";
+let sortOrder = "desc";
+let filterSymptoms = new Set();
+let calendarMonth = (() => {
+  const d = new Date();
+  d.setDate(1);
+  return d;
+})();
+let selectedDay = null;
+
+const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 function fmtDate(d) {
   return new Date(d).toLocaleDateString("de-CH");
@@ -75,13 +87,59 @@ async function route() {
   } else if (hash === "#/observers") {
     renderObservers(view);
   } else {
-    renderEntryList(view);
+    renderOverview(view);
   }
 }
 
-// ---------- Entry list ----------
+// ---------- Overview (Liste / Kalender) ----------
 
-async function renderEntryList(view) {
+function entryCardHtml(e) {
+  return `
+    <article class="entry-card" data-id="${e.id}">
+      <div class="entry-card-header">
+        <strong>${fmtDate(e.entry_date)}</strong>
+        <span class="entry-actions">
+          <button class="icon-btn edit" data-id="${e.id}" title="Bearbeiten">✎</button>
+          <button class="icon-btn delete" data-id="${e.id}" title="Löschen">🗑</button>
+        </span>
+      </div>
+      ${e.triggers ? `<p class="muted">Auslöser: ${escapeHtml(e.triggers)}</p>` : ""}
+      <div class="badges">
+        ${(e.symptoms || []).map((s) => `<span class="badge">${escapeHtml(symptomLabel(s))}</span>`).join("")}
+        ${e.symptoms_other ? `<span class="badge muted-badge">${escapeHtml(e.symptoms_other)}</span>` : ""}
+      </div>
+      ${e.pain_location ? `<p class="muted">Schmerzort: ${escapeHtml(e.pain_location)}</p>` : ""}
+    </article>`;
+}
+
+function wireEntryCardActions(container, onChange) {
+  container.querySelectorAll(".edit").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      location.hash = `#/entries/${btn.dataset.id}/edit`;
+    })
+  );
+  container.querySelectorAll(".delete").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      if (!confirm("Diesen Eintrag wirklich löschen?")) return;
+      await deleteEntry(btn.dataset.id);
+      await onChange();
+    })
+  );
+}
+
+function applyFilterSort(entries) {
+  let result = entries;
+  if (filterSymptoms.size > 0) {
+    result = result.filter((e) => (e.symptoms || []).some((s) => filterSymptoms.has(s)));
+  }
+  result = [...result].sort((a, b) => {
+    const diff = new Date(a.entry_date) - new Date(b.entry_date);
+    return sortOrder === "asc" ? diff : -diff;
+  });
+  return result;
+}
+
+async function renderOverview(view) {
   try {
     cachedEntries = await listEntries();
   } catch (err) {
@@ -89,46 +147,150 @@ async function renderEntryList(view) {
     return;
   }
 
+  view.innerHTML = `
+    <div class="overview-tabs">
+      <button type="button" class="tab-btn ${overviewMode === "list" ? "active" : ""}" data-mode="list">📋 Liste</button>
+      <button type="button" class="tab-btn ${overviewMode === "calendar" ? "active" : ""}" data-mode="calendar">🗓 Kalender</button>
+    </div>
+    <div id="overviewBody"></div>
+  `;
+
+  view.querySelectorAll(".tab-btn").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      overviewMode = btn.dataset.mode;
+      renderOverview(view);
+    })
+  );
+
+  const body = document.getElementById("overviewBody");
   if (cachedEntries.length === 0) {
-    view.innerHTML = `<p class="hint">Noch keine Einträge. Tippe unten auf "Neu", um den ersten Eintrag zu erstellen.</p>`;
+    body.innerHTML = `<p class="hint">Noch keine Einträge. Tippe unten auf "Neu", um den ersten Eintrag zu erstellen.</p>`;
     return;
   }
 
-  view.innerHTML = `<div class="entry-list">${cachedEntries
-    .map(
-      (e) => `
-      <article class="entry-card" data-id="${e.id}">
-        <div class="entry-card-header">
-          <strong>${fmtDate(e.entry_date)}</strong>
-          <span class="entry-actions">
-            <button class="icon-btn edit" data-id="${e.id}" title="Bearbeiten">✎</button>
-            <button class="icon-btn delete" data-id="${e.id}" title="Löschen">🗑</button>
-          </span>
-        </div>
-        ${e.triggers ? `<p class="muted">Auslöser: ${escapeHtml(e.triggers)}</p>` : ""}
-        <div class="badges">
-          ${(e.symptoms || [])
-            .map((s) => `<span class="badge">${escapeHtml(symptomLabel(s))}</span>`)
-            .join("")}
-          ${e.symptoms_other ? `<span class="badge muted-badge">${escapeHtml(e.symptoms_other)}</span>` : ""}
-        </div>
-        ${e.pain_location ? `<p class="muted">Schmerzort: ${escapeHtml(e.pain_location)}</p>` : ""}
-      </article>`
-    )
-    .join("")}</div>`;
+  if (overviewMode === "calendar") {
+    renderCalendarSection(body, () => renderOverview(view));
+  } else {
+    renderListSection(body, () => renderOverview(view));
+  }
+}
 
-  view.querySelectorAll(".edit").forEach((btn) =>
+function renderListSection(body, onChange) {
+  const filtered = applyFilterSort(cachedEntries);
+
+  body.innerHTML = `
+    <div class="list-controls">
+      <label class="sort-label">Sortierung
+        <select id="sortSelect">
+          <option value="desc" ${sortOrder === "desc" ? "selected" : ""}>Neueste zuerst</option>
+          <option value="asc" ${sortOrder === "asc" ? "selected" : ""}>Älteste zuerst</option>
+        </select>
+      </label>
+    </div>
+    <div class="filter-chips">
+      <button type="button" class="chip filter-chip ${filterSymptoms.size === 0 ? "active" : ""}" data-key="__all">Alle</button>
+      ${SYMPTOMS.map(
+        (s) => `<button type="button" class="chip filter-chip ${filterSymptoms.has(s.key) ? "active" : ""}" data-key="${s.key}" style="--dot-color:${s.color}">${s.label}</button>`
+      ).join("")}
+    </div>
+    ${
+      filtered.length === 0
+        ? `<p class="hint">Keine Einträge für diese Filterauswahl.</p>`
+        : `<div class="entry-list">${filtered.map(entryCardHtml).join("")}</div>`
+    }
+  `;
+
+  document.getElementById("sortSelect").addEventListener("change", (e) => {
+    sortOrder = e.target.value;
+    renderListSection(body, onChange);
+  });
+
+  body.querySelectorAll(".filter-chip").forEach((btn) =>
     btn.addEventListener("click", () => {
-      location.hash = `#/entries/${btn.dataset.id}/edit`;
+      const key = btn.dataset.key;
+      if (key === "__all") {
+        filterSymptoms.clear();
+      } else if (filterSymptoms.has(key)) {
+        filterSymptoms.delete(key);
+      } else {
+        filterSymptoms.add(key);
+      }
+      renderListSection(body, onChange);
     })
   );
-  view.querySelectorAll(".delete").forEach((btn) =>
-    btn.addEventListener("click", async () => {
-      if (!confirm("Diesen Eintrag wirklich löschen?")) return;
-      await deleteEntry(btn.dataset.id);
-      renderEntryList(view);
+
+  wireEntryCardActions(body, onChange);
+}
+
+function renderCalendarSection(body, onChange) {
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
+  const monthLabel = calendarMonth.toLocaleDateString("de-CH", { month: "long", year: "numeric" });
+  const firstOfMonth = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const leadingBlanks = (firstOfMonth.getDay() + 6) % 7; // Montag = 0
+  const todayStr = todayIso();
+
+  const entriesByDay = {};
+  cachedEntries.forEach((e) => {
+    (entriesByDay[e.entry_date] ||= []).push(e);
+  });
+
+  const cells = [];
+  for (let i = 0; i < leadingBlanks; i++) cells.push(`<div class="cal-cell empty"></div>`);
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const dayEntries = entriesByDay[dateStr] || [];
+    const symptomKeys = [...new Set(dayEntries.flatMap((e) => e.symptoms || []))].slice(0, 4);
+    const classes = ["cal-cell"];
+    if (dayEntries.length) classes.push("has-entry");
+    if (dateStr === todayStr) classes.push("today");
+    if (dateStr === selectedDay) classes.push("selected");
+    cells.push(`
+      <button type="button" class="${classes.join(" ")}" data-date="${dateStr}" ${dayEntries.length ? "" : "disabled"}>
+        <span class="cal-daynum">${day}</span>
+        <span class="cal-dots">${symptomKeys.map((k) => `<span class="cal-dot" style="background:${symptomColor(k)}"></span>`).join("")}</span>
+      </button>
+    `);
+  }
+
+  const dayEntries = selectedDay ? entriesByDay[selectedDay] || [] : [];
+
+  body.innerHTML = `
+    <div class="calendar-nav">
+      <button type="button" id="prevMonth" class="icon-btn" title="Vorheriger Monat">‹</button>
+      <strong>${monthLabel}</strong>
+      <button type="button" id="nextMonth" class="icon-btn" title="Nächster Monat">›</button>
+    </div>
+    <div class="calendar-grid">
+      ${WEEKDAYS.map((w) => `<div class="cal-cell cal-weekday">${w}</div>`).join("")}
+      ${cells.join("")}
+    </div>
+    ${
+      selectedDay
+        ? `<h3 class="cal-selected-heading">${fmtDate(selectedDay)}</h3><div class="entry-list">${dayEntries.map(entryCardHtml).join("")}</div>`
+        : `<p class="hint">Tippe auf einen markierten Tag, um die Einträge zu sehen.</p>`
+    }
+  `;
+
+  document.getElementById("prevMonth").addEventListener("click", () => {
+    calendarMonth = new Date(year, month - 1, 1);
+    selectedDay = null;
+    renderCalendarSection(body, onChange);
+  });
+  document.getElementById("nextMonth").addEventListener("click", () => {
+    calendarMonth = new Date(year, month + 1, 1);
+    selectedDay = null;
+    renderCalendarSection(body, onChange);
+  });
+  body.querySelectorAll(".cal-cell.has-entry").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      selectedDay = selectedDay === btn.dataset.date ? null : btn.dataset.date;
+      renderCalendarSection(body, onChange);
     })
   );
+
+  wireEntryCardActions(body, onChange);
 }
 
 // ---------- Entry form ----------

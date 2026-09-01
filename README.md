@@ -12,9 +12,9 @@ Backend für Login und Datenspeicherung.
 - Zusätzliche Medikamente (Freitext)
 - Besonderes (Freitext)
 - Schmerz-/Symptomort: Freitext + anklickbare Körperkarte (Vorder-/Rückseite) mit
-  Farbcodierung je Symptom
-- Übersicht aller Einträge, Bearbeiten/Löschen
-- Export als PDF (Druckansicht) oder CSV für den Arztbesuch
+  Farbcodierung je Symptom und Reset-Knopf zum Entfernen aller Punkte
+- Übersicht als Liste oder Kalender, mit Filter nach Symptom und Sortierung nach Datum
+- Export als PDF (Druckansicht, inkl. Körperkarte) oder CSV für den Arztbesuch
 - Login mit E-Mail/Passwort (Supabase Auth), Daten sind über Row Level Security abgesichert
 - Beobachter/innen einladen: weitere Personen können deine Einträge nur lesen, nicht bearbeiten
 
