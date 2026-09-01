@@ -1,4 +1,4 @@
-const CACHE_NAME = "krankengeschichte-v1";
+const CACHE_NAME = "krankengeschichte-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -35,17 +35,14 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin || event.request.method !== "GET") {
     return; // Supabase/esm.sh-Anfragen unangetastet lassen
   }
+  // Network-first: immer die aktuelle Version laden, Cache nur als Offline-Fallback.
   event.respondWith(
-    caches.match(event.request).then(
-      (cached) =>
-        cached ||
-        fetch(event.request)
-          .then((res) => {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-            return res;
-          })
-          .catch(() => cached)
-    )
+    fetch(event.request)
+      .then((res) => {
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return res;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
