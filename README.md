@@ -6,15 +6,17 @@ Backend für Login und Datenspeicherung.
 
 ## Funktionen
 
-- Neuer Eintrag: Datum, möglicher Auslöser (Freitext)
+- Neuer Eintrag: Datum + optionale Uhrzeit, möglicher Auslöser (Freitext)
 - Symptome zum Ankreuzen (Anschwellung, Angioödem, Urtikaria, Schwindel, Jucken, Übelkeit,
   Erbrechen, Sprachfindungsstörung, Tremor) + Freifeld für weitere Symptome
 - Zusätzliche Medikamente (Freitext)
 - Besonderes (Freitext)
 - Schmerz-/Symptomort: Freitext + anklickbare Körperkarte (Vorder-/Rückseite) mit
   Farbcodierung je Symptom und Reset-Knopf zum Entfernen aller Punkte
-- Übersicht als Liste oder Kalender, mit Filter nach Symptom und Sortierung nach Datum
-- Export als PDF (Druckansicht, inkl. Körperkarte) oder CSV für den Arztbesuch
+- Foto-Anhänge pro Eintrag (z.B. Foto der Hautreaktion), sicher in Supabase Storage gespeichert
+- Übersicht als Liste oder Kalender, mit Filter nach Symptom und Sortierung nach Datum/Uhrzeit
+- Export als PDF (Druckansicht, inkl. Körperkarte und Fotos) oder CSV für den Arztbesuch,
+  optional auf einen Zeitraum eingegrenzt
 - Login mit E-Mail/Passwort (Supabase Auth), Daten sind über Row Level Security abgesichert
 - Beobachter/innen einladen: weitere Personen können deine Einträge nur lesen, nicht bearbeiten
 
@@ -25,7 +27,10 @@ Backend für Login und Datenspeicherung.
 1. Auf [supabase.com](https://supabase.com) kostenlos registrieren und ein neues Projekt anlegen.
 2. Im Dashboard unter **SQL Editor** → **New query** den kompletten Inhalt von
    [`sql/schema.sql`](sql/schema.sql) einfügen und ausführen. Das erstellt die Tabellen
-   `entries` und `shares` inkl. Row-Level-Security-Regeln.
+   `entries` und `shares`, den Storage-Bucket `entry-photos` für Fotos, sowie alle
+   Row-Level-Security-Regeln. Das Skript ist gefahrlos mehrfach ausführbar — nach jedem
+   Update dieses Projekts (z.B. neue Spalten) einfach den aktuellen Inhalt erneut einfügen
+   und ausführen.
 3. Unter **Authentication → Users** → **Add user** dein eigenes Konto (E-Mail + Passwort)
    anlegen.
 4. Unter **Authentication → Providers → Email** die Option **"Allow new users to sign up"**

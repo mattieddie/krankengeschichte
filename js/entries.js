@@ -58,3 +58,24 @@ export async function removeObserver(shareId) {
   const { error } = await supabase.from("shares").delete().eq("id", shareId);
   if (error) throw error;
 }
+
+const PHOTOS_BUCKET = "entry-photos";
+
+export async function uploadAttachment(ownerId, entryId, file) {
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const path = `${ownerId}/${entryId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from(PHOTOS_BUCKET).upload(path, file, { contentType: file.type || undefined });
+  if (error) throw error;
+  return { path, name: file.name, size: file.size, type: file.type };
+}
+
+export async function removeAttachment(path) {
+  const { error } = await supabase.storage.from(PHOTOS_BUCKET).remove([path]);
+  if (error) throw error;
+}
+
+export async function getAttachmentSignedUrl(path, expiresIn = 300) {
+  const { data, error } = await supabase.storage.from(PHOTOS_BUCKET).createSignedUrl(path, expiresIn);
+  if (error) throw error;
+  return data.signedUrl;
+}

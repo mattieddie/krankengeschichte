@@ -1,6 +1,18 @@
 import { supabase } from "./supabaseClient.js";
 import { signIn, signOut, getSession, onAuthChange, requestPasswordReset } from "./auth.js";
-import { listEntries, getEntry, createEntry, updateEntry, deleteEntry, listMyShares, inviteObserver, removeObserver } from "./entries.js";
+import {
+  listEntries,
+  getEntry,
+  createEntry,
+  updateEntry,
+  deleteEntry,
+  listMyShares,
+  inviteObserver,
+  removeObserver,
+  uploadAttachment,
+  removeAttachment,
+  getAttachmentSignedUrl,
+} from "./entries.js";
 import { SYMPTOMS, symptomLabel, symptomColor } from "./symptoms.js";
 import { renderBodyMap } from "./bodymap.js";
 import { exportCsv, openPrintView } from "./export.js";
@@ -23,6 +35,15 @@ const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 function fmtDate(d) {
   return new Date(d).toLocaleDateString("de-CH");
+}
+
+function fmtDateTime(e) {
+  const datePart = fmtDate(e.entry_date);
+  return e.entry_time ? `${datePart}, ${e.entry_time.slice(0, 5)} Uhr` : datePart;
+}
+
+function entrySortValue(e) {
+  return new Date(`${e.entry_date}T${e.entry_time || "00:00:00"}`).getTime();
 }
 
 function todayIso() {
@@ -94,10 +115,11 @@ async function route() {
 // ---------- Overview (Liste / Kalender) ----------
 
 function entryCardHtml(e) {
+  const photoCount = (e.attachments || []).length;
   return `
     <article class="entry-card" data-id="${e.id}">
       <div class="entry-card-header">
-        <strong>${fmtDate(e.entry_date)}</strong>
+        <strong>${fmtDateTime(e)}</strong>
         <span class="entry-actions">
           <button class="icon-btn edit" data-id="${e.id}" title="Bearbeiten">✎</button>
           <button class="icon-btn delete" data-id="${e.id}" title="Löschen">🗑</button>
@@ -107,6 +129,7 @@ function entryCardHtml(e) {
       <div class="badges">
         ${(e.symptoms || []).map((s) => `<span class="badge">${escapeHtml(symptomLabel(s))}</span>`).join("")}
         ${e.symptoms_other ? `<span class="badge muted-badge">${escapeHtml(e.symptoms_other)}</span>` : ""}
+        ${photoCount ? `<span class="badge muted-badge">📷 ${photoCount}</span>` : ""}
       </div>
       ${e.pain_location ? `<p class="muted">Schmerzort: ${escapeHtml(e.pain_location)}</p>` : ""}
     </article>`;
@@ -133,7 +156,7 @@ function applyFilterSort(entries) {
     result = result.filter((e) => (e.symptoms || []).some((s) => filterSymptoms.has(s)));
   }
   result = [...result].sort((a, b) => {
-    const diff = new Date(a.entry_date) - new Date(b.entry_date);
+    const diff = entrySortValue(a) - entrySortValue(b);
     return sortOrder === "asc" ? diff : -diff;
   });
   return result;
@@ -299,12 +322,20 @@ function renderEntryForm(view, entry) {
   const isEdit = !!entry;
   const symptoms = entry?.symptoms || [];
   let bodyPoints = entry?.body_points ? [...entry.body_points] : [];
+  let existingAttachments = entry?.attachments ? [...entry.attachments] : [];
+  let pendingFiles = []; // { file, previewUrl }
+  let removedPaths = [];
 
   view.innerHTML = `
     <form id="entryForm" class="form">
-      <label>Datum
-        <input type="date" name="entry_date" required value="${entry?.entry_date || todayIso()}" />
-      </label>
+      <div class="date-range">
+        <label>Datum
+          <input type="date" name="entry_date" required value="${entry?.entry_date || todayIso()}" />
+        </label>
+        <label>Uhrzeit (optional)
+          <input type="time" name="entry_time" value="${entry?.entry_time ? entry.entry_time.slice(0, 5) : ""}" />
+        </label>
+      </div>
 
       <label>Möglicher Auslöser
         <input type="text" name="triggers" placeholder="z.B. Erdnüsse, Sport, Stress …" value="${escapeHtml(entry?.triggers || "")}" />
@@ -342,6 +373,15 @@ function renderEntryForm(view, entry) {
         <textarea name="notes" rows="3" placeholder="Weitere Beobachtungen …">${escapeHtml(entry?.notes || "")}</textarea>
       </label>
 
+      <fieldset>
+        <legend>Fotos</legend>
+        <div id="attachmentThumbs" class="attachment-thumbs"></div>
+        <label class="file-btn">
+          📷 Foto hinzufügen
+          <input type="file" id="photoInput" accept="image/*" multiple hidden />
+        </label>
+      </fieldset>
+
       <div class="form-actions">
         <button type="submit" class="primary">Speichern</button>
         <button type="button" id="cancelBtn" class="secondary">Abbrechen</button>
@@ -354,6 +394,52 @@ function renderEntryForm(view, entry) {
     bodyPoints = pts;
   });
 
+  const thumbsEl = document.getElementById("attachmentThumbs");
+
+  async function renderThumbs() {
+    thumbsEl.innerHTML =
+      existingAttachments
+        .map((a, i) => `<div class="thumb"><img data-existing-idx="${i}" alt="${escapeHtml(a.name || "Foto")}" /><button type="button" class="thumb-remove" data-kind="existing" data-idx="${i}">×</button></div>`)
+        .join("") +
+      pendingFiles
+        .map((p, i) => `<div class="thumb"><img src="${p.previewUrl}" alt="${escapeHtml(p.file.name)}" /><button type="button" class="thumb-remove" data-kind="pending" data-idx="${i}">×</button></div>`)
+        .join("");
+
+    thumbsEl.querySelectorAll("img[data-existing-idx]").forEach(async (img) => {
+      const idx = Number(img.dataset.existingIdx);
+      const att = existingAttachments[idx];
+      if (!att) return;
+      try {
+        img.src = await getAttachmentSignedUrl(att.path);
+      } catch {
+        img.alt = "Foto konnte nicht geladen werden";
+      }
+    });
+
+    thumbsEl.querySelectorAll(".thumb-remove").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.idx);
+        if (btn.dataset.kind === "existing") {
+          removedPaths.push(existingAttachments[idx].path);
+          existingAttachments.splice(idx, 1);
+        } else {
+          URL.revokeObjectURL(pendingFiles[idx].previewUrl);
+          pendingFiles.splice(idx, 1);
+        }
+        renderThumbs();
+      })
+    );
+  }
+  renderThumbs();
+
+  document.getElementById("photoInput").addEventListener("change", (e) => {
+    [...e.target.files].forEach((file) => {
+      pendingFiles.push({ file, previewUrl: URL.createObjectURL(file) });
+    });
+    e.target.value = "";
+    renderThumbs();
+  });
+
   document.getElementById("cancelBtn").addEventListener("click", () => {
     location.hash = "#/entries";
   });
@@ -364,6 +450,7 @@ function renderEntryForm(view, entry) {
     const fd = new FormData(form);
     const payload = {
       entry_date: fd.get("entry_date"),
+      entry_time: fd.get("entry_time") || null,
       triggers: fd.get("triggers") || null,
       symptoms: fd.getAll("symptoms"),
       symptoms_other: fd.get("symptoms_other") || null,
@@ -371,15 +458,30 @@ function renderEntryForm(view, entry) {
       pain_location: fd.get("pain_location") || null,
       notes: fd.get("notes") || null,
       body_points: bodyPoints,
+      attachments: existingAttachments,
     };
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
     try {
-      if (isEdit) {
-        await updateEntry(entry.id, payload);
-      } else {
-        await createEntry(payload);
+      let saved = isEdit ? await updateEntry(entry.id, payload) : await createEntry(payload);
+
+      for (const path of removedPaths) {
+        await removeAttachment(path).catch(() => {});
       }
+
+      if (pendingFiles.length) {
+        const uploaded = [];
+        for (const pf of pendingFiles) {
+          uploaded.push(await uploadAttachment(currentSession.user.id, saved.id, pf.file));
+        }
+        saved = await updateEntry(saved.id, { attachments: [...existingAttachments, ...uploaded] });
+      } else if (removedPaths.length) {
+        saved = await updateEntry(saved.id, { attachments: existingAttachments });
+      }
+
       location.hash = "#/entries";
     } catch (err) {
+      submitBtn.disabled = false;
       document.getElementById("formError").textContent = "Fehler: " + err.message;
     }
   });

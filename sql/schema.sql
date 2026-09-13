@@ -13,9 +13,15 @@ create table if not exists public.entries (
   notes text,
   pain_location text,
   body_points jsonb not null default '[]',
+  entry_time time,
+  attachments jsonb not null default '[]',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Falls die Tabelle schon vor diesen Feldern erstellt wurde (bestehende Installation):
+alter table public.entries add column if not exists entry_time time;
+alter table public.entries add column if not exists attachments jsonb not null default '[]';
 
 create index if not exists entries_owner_id_idx on public.entries(owner_id);
 create index if not exists entries_entry_date_idx on public.entries(entry_date);
@@ -85,6 +91,36 @@ create policy "observers see own invites"
   on public.shares
   for select
   using (lower(invited_email) = lower(auth.jwt() ->> 'email'));
+
+-- Storage-Bucket für Foto-Anhänge zu Einträgen (privat - Zugriff nur über die
+-- Row-Level-Security-Regeln unten, nicht öffentlich abrufbar).
+insert into storage.buckets (id, name, public)
+values ('entry-photos', 'entry-photos', false)
+on conflict (id) do nothing;
+
+-- Eigentümer/in darf im eigenen Ordner (Pfad beginnt mit der eigenen User-ID)
+-- Fotos hochladen, ansehen und löschen.
+drop policy if exists "owner manage own photos" on storage.objects;
+create policy "owner manage own photos"
+  on storage.objects
+  for all
+  using (bucket_id = 'entry-photos' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'entry-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- Eingeladene Beobachter/innen dürfen Fotos aus dem Ordner der Person, die sie
+-- eingeladen hat, nur ansehen.
+drop policy if exists "observers view shared photos" on storage.objects;
+create policy "observers view shared photos"
+  on storage.objects
+  for select
+  using (
+    bucket_id = 'entry-photos'
+    and exists (
+      select 1 from public.shares s
+      where s.owner_id::text = (storage.foldername(name))[1]
+        and lower(s.invited_email) = lower(auth.jwt() ->> 'email')
+    )
+  );
 
 -- WICHTIG: Damit sich niemand außer dir selbst registrieren kann, im Supabase
 -- Dashboard unter Authentication -> Providers -> Email die Option
