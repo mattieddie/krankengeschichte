@@ -7,6 +7,7 @@ create table if not exists public.entries (
   owner_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
   entry_date date not null,
   triggers text,
+  activities text,
   symptoms text[] not null default '{}',
   symptoms_other text,
   medications text,
@@ -22,6 +23,7 @@ create table if not exists public.entries (
 -- Falls die Tabelle schon vor diesen Feldern erstellt wurde (bestehende Installation):
 alter table public.entries add column if not exists entry_time time;
 alter table public.entries add column if not exists attachments jsonb not null default '[]';
+alter table public.entries add column if not exists activities text;
 
 create index if not exists entries_owner_id_idx on public.entries(owner_id);
 create index if not exists entries_entry_date_idx on public.entries(entry_date);

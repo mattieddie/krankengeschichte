@@ -126,6 +126,7 @@ function entryCardHtml(e) {
         </span>
       </div>
       ${e.triggers ? `<p class="muted">Auslöser: ${escapeHtml(e.triggers)}</p>` : ""}
+      ${e.activities ? `<p class="muted">Aktivität: ${escapeHtml(e.activities)}</p>` : ""}
       <div class="badges">
         ${(e.symptoms || []).map((s) => `<span class="badge">${escapeHtml(symptomLabel(s))}</span>`).join("")}
         ${e.symptoms_other ? `<span class="badge muted-badge">${escapeHtml(e.symptoms_other)}</span>` : ""}
@@ -341,6 +342,10 @@ function renderEntryForm(view, entry) {
         <input type="text" name="triggers" placeholder="z.B. Erdnüsse, Sport, Stress …" value="${escapeHtml(entry?.triggers || "")}" />
       </label>
 
+      <label>Aktivitäten
+        <input type="text" name="activities" placeholder="z.B. Joggen, Velofahren, Ruhe …" value="${escapeHtml(entry?.activities || "")}" />
+      </label>
+
       <fieldset>
         <legend>Symptome</legend>
         <div class="checkbox-grid">
@@ -452,6 +457,7 @@ function renderEntryForm(view, entry) {
       entry_date: fd.get("entry_date"),
       entry_time: fd.get("entry_time") || null,
       triggers: fd.get("triggers") || null,
+      activities: fd.get("activities") || null,
       symptoms: fd.getAll("symptoms"),
       symptoms_other: fd.get("symptoms_other") || null,
       medications: fd.get("medications") || null,

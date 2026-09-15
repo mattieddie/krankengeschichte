@@ -1,4 +1,4 @@
-import { SYMPTOMS, OTHER_COLOR } from "./symptoms.js";
+import { BODY_MAP_SYMPTOMS, OTHER_COLOR } from "./symptoms.js";
 
 export const VIEW_W = 200;
 export const VIEW_H = 400;
@@ -50,7 +50,7 @@ function makeSvg(view) {
 
 export function renderBodyMap(container, points, onChange) {
   container.innerHTML = "";
-  let activeSymptomKey = SYMPTOMS[0].key;
+  let activeSymptomKey = BODY_MAP_SYMPTOMS[0].key;
   let activeView = "front";
   const localPoints = [...points];
 
@@ -78,7 +78,7 @@ export function renderBodyMap(container, points, onChange) {
 
   const legend = document.createElement("div");
   legend.className = "bodymap-legend";
-  SYMPTOMS.forEach((s, i) => {
+  BODY_MAP_SYMPTOMS.forEach((s, i) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "legend-dot" + (i === 0 ? " active" : "");
@@ -127,7 +127,7 @@ export function renderBodyMap(container, points, onChange) {
       const rect = svg.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
       const y = (e.clientY - rect.top) / rect.height;
-      const symptom = SYMPTOMS.find((s) => s.key === activeSymptomKey);
+      const symptom = BODY_MAP_SYMPTOMS.find((s) => s.key === activeSymptomKey);
       localPoints.push({
         view,
         x,

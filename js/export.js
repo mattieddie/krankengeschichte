@@ -23,6 +23,7 @@ export function exportCsv(entries) {
     "Datum",
     "Uhrzeit",
     "Auslöser",
+    "Aktivitäten",
     "Symptome",
     "Weitere Symptome",
     "Medikamente",
@@ -34,6 +35,7 @@ export function exportCsv(entries) {
     fmtDate(e.entry_date),
     e.entry_time ? e.entry_time.slice(0, 5) : "",
     e.triggers || "",
+    e.activities || "",
     (e.symptoms || []).map(symptomLabel).join(", "),
     e.symptoms_other || "",
     e.medications || "",
@@ -123,6 +125,7 @@ export async function openPrintView(entries) {
         <div class="print-entry-body">
           <table>
             <tr><th>Auslöser</th><td>${e.triggers || "–"}</td></tr>
+            <tr><th>Aktivitäten</th><td>${e.activities || "–"}</td></tr>
             <tr><th>Symptome</th><td>${(e.symptoms || []).map(symptomLabel).join(", ") || "–"}</td></tr>
             <tr><th>Weitere Symptome</th><td>${e.symptoms_other || "–"}</td></tr>
             <tr><th>Medikamente</th><td>${e.medications || "–"}</td></tr>

@@ -7,12 +7,15 @@ Backend für Login und Datenspeicherung.
 ## Funktionen
 
 - Neuer Eintrag: Datum + optionale Uhrzeit, möglicher Auslöser (Freitext)
-- Symptome zum Ankreuzen (Anschwellung, Angioödem, Urtikaria, Schwindel, Jucken, Übelkeit,
-  Erbrechen, Sprachfindungsstörung, Tremor) + Freifeld für weitere Symptome
+- Symptome zum Ankreuzen (Anschwellung, Angioödem, Urtikaria, Jucken, Taubheitsgefühl,
+  Kribbeln, Schwindel, Übelkeit, Erbrechen, Sprachfindungsstörung, Tremor) + Freifeld für
+  weitere Symptome
+- Aktivitäten (Freitext, z.B. was gerade getan wurde)
 - Zusätzliche Medikamente (Freitext)
 - Besonderes (Freitext)
-- Schmerz-/Symptomort: Freitext + anklickbare Körperkarte (Vorder-/Rückseite) mit
-  Farbcodierung je Symptom und Reset-Knopf zum Entfernen aller Punkte
+- Schmerz-/Symptomort: Freitext + anklickbare Körperkarte (Vorder-/Rückseite) — dort nur die
+  räumlich lokalisierbaren Symptome (Anschwellung, Angioödem, Urtikaria, Jucken,
+  Taubheitsgefühl, Kribbeln), mit Farbcodierung und Reset-Knopf zum Entfernen aller Punkte
 - Foto-Anhänge pro Eintrag (z.B. Foto der Hautreaktion), sicher in Supabase Storage gespeichert
 - Übersicht als Liste oder Kalender, mit Filter nach Symptom und Sortierung nach Datum/Uhrzeit
 - Export als PDF (Druckansicht, inkl. Körperkarte und Fotos) oder CSV für den Arztbesuch,
